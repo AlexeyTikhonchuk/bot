@@ -1,3 +1,4 @@
+import exceptions
 import logging
 import os
 import sys
@@ -26,86 +27,63 @@ HOMEWORK_STATUSES = {
     'rejected': 'Работа проверена: у ревьюера есть замечания.'
 }
 
-logging.basicConfig(
-    level=logging.DEBUG,
-    format='%(asctime)s, %(levelname)s, %(message)s',
-    filename='info.log'
-)
 
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
-handler = StreamHandler()
-logger.addHandler(handler)
-formatter = logging.Formatter(
-    '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-handler.setFormatter(formatter)
-
-
-def send_message(bot, message):
+def send_message(bot: telegram.Bot, message: str):
     """Отправить сообщение."""
     text = str(message)
     try:
+        logger.info('Отправляем сообщение')
         bot.send_message(TELEGRAM_CHAT_ID, text)
-    except telegram.error.TelegramError as error:
-        logger.error(f'Ошибка при отправке сообщения: {error}')
+        logger.info('Сообщение отправлено')
+    except telegram.error.TelegramError:
+        raise exceptions.TelegramException('Ошибка отправки сообщения')
 
 
-def get_api_answer(current_timestamp):
+def get_api_answer(current_timestamp: int):
     """Сделать API запрос."""
     params = {'from_date': current_timestamp}
     try:
+        logger.info('Делаем запрос к API')
         response = requests.get(ENDPOINT, headers=HEADERS, params=params)
         if response.status_code != HTTPStatus.OK:
-            logger.error('Неудовлетворительный статус ответа')
-            raise Exception('Неудовлетворительный статус ответа')
+            raise exceptions.WrongStatusCodeException('Неудовлетворительный статус ответа')
+        logger.info('Запрос к API прошел успешно')
         return response.json()
     except requests.exceptions.RequestException:
-        logger.error('Эндпоинт не доступен')
-        raise Exception('Эндпоинт не доступен')
-    finally:
-        logger.info('Запрос к API прошел успешно')
+        raise exceptions.EndpointIsNotAvailable('Эндпоинт не доступен')
 
 
-def check_response(response):
+def check_response(response: requests.models.Response):
     """Проверить ответ API."""
+    logger.info('Проверяем ответ сервера')
     if not isinstance(response, dict):
         raise TypeError('Неверный формат ответа')
-    if ('homeworks' or 'current_date') not in response.keys():
+    if 'homeworks' not in response or 'current_date' not in response:
         raise KeyError('Один из ключей отсутствует')
-    homeworks_list = response['homeworks']
-    if not isinstance(homeworks_list, list):
+    homeworks = response['homeworks']
+    if not isinstance(homeworks, list):
         raise TypeError('Неверный формат ответа')
-    return homeworks_list
+    return homeworks
 
 
-def parse_status(homework):
+def parse_status(homework: dict):
     """Получить статус работы."""
-    try:
-        homework_name = homework.get('homework_name')
-    except KeyError:
-        raise KeyError('Ключ "homework_name" отсутствует')
-    try:
-        homework_status = homework.get('status')
-    except KeyError:
-        raise KeyError('Ключ "status" отсутствует')
+    homework_name = homework.get('homework_name')
+    homework_status = homework.get('status')
+    if homework_status is None:
+        raise KeyError('Неправильный ключ')
     try:
         verdict = HOMEWORK_STATUSES[homework_status]
         return f'Изменился статус проверки работы "{homework_name}". {verdict}'
     except KeyError:
-        logger.error(f'Статус домашней работы "{homework_status}" '
-                     'отсутствует в списке')
-        raise KeyError
+        raise KeyError(f'Статус домашней работы "{homework_status}" '
+                       f'отсутствует в списке')
 
 
 def check_tokens():
     """Проверить наличие токенов."""
     envs = ('PRACTICUM_TOKEN', 'TELEGRAM_TOKEN', 'TELEGRAM_CHAT_ID')
-    for name in envs:
-        if not globals()[name]:
-            logger.critical(f'Отсутствует токен: {name}')
-            return False
-    return True
+    return all(globals()[name] for name in envs)
 
 
 def main():
@@ -114,22 +92,40 @@ def main():
         logger.critical('Отсутствуют необходимые токены')
         sys.exit()
     bot = telegram.Bot(token=TELEGRAM_TOKEN)
-    current_timestamp = 0
+    current_timestamp = int(time.time())
+    prev_report = ''
     while True:
         try:
             response = get_api_answer(current_timestamp)
-            current_timestamp = response.get('current_date')
+            current_timestamp = response.get('current_date', current_timestamp)
             homework = check_response(response)
             if len(homework) != 0:
-                message = parse_status(homework[0])
-                bot.send_message(TELEGRAM_CHAT_ID, message)
-            time.sleep(RETRY_TIME)
+                current_report = parse_status(homework[0])
+                if current_report != prev_report:
+                    send_message(bot, current_report)
+                    prev_report = current_report
+            else:
+                logger.info('Обновлений не произошло')
         except Exception as error:
             message = f'Сбой в работе программы: {error}'
             logger.error(message)
             bot.send_message(TELEGRAM_CHAT_ID, message)
+        finally:
             time.sleep(RETRY_TIME)
 
 
 if __name__ == '__main__':
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s, %(levelname)s, %(message)s',
+        filename='info.log'
+    )
+
+    logger = logging.getLogger(__name__)
+    handler = StreamHandler()
+    logger.addHandler(handler)
+    formatter = logging.Formatter(
+        '%(asctime)s - %(levelname)s - %(message)s - %(funcName)s - %(lineno)s'
+    )
+    handler.setFormatter(formatter)
     main()
