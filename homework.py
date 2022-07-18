@@ -28,6 +28,13 @@ HOMEWORK_STATUSES = {
     'rejected': 'Работа проверена: у ревьюера есть замечания.'
 }
 
+logger = logging.getLogger(__name__)
+handler = StreamHandler()
+logger.addHandler(handler)
+formatter = logging.Formatter(
+    '%(asctime)s - %(levelname)s - %(message)s - %(funcName)s - %(lineno)s'
+)
+handler.setFormatter(formatter)
 
 def send_message(bot: telegram.Bot, message: str):
     """Отправить сообщение."""
@@ -123,11 +130,5 @@ if __name__ == '__main__':
         filename='info.log'
     )
 
-    logger = logging.getLogger(__name__)
-    handler = StreamHandler()
-    logger.addHandler(handler)
-    formatter = logging.Formatter(
-        '%(asctime)s - %(levelname)s - %(message)s - %(funcName)s - %(lineno)s'
-    )
-    handler.setFormatter(formatter)
+
     main()
