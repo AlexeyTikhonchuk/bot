@@ -1,4 +1,3 @@
-import exceptions
 import logging
 import os
 import sys
@@ -9,6 +8,8 @@ from logging import StreamHandler
 import requests
 import telegram
 from dotenv import load_dotenv
+
+import exceptions
 
 load_dotenv()
 
@@ -46,7 +47,8 @@ def get_api_answer(current_timestamp: int):
         logger.info('Делаем запрос к API')
         response = requests.get(ENDPOINT, headers=HEADERS, params=params)
         if response.status_code != HTTPStatus.OK:
-            raise exceptions.WrongStatusCodeException('Неудовлетворительный статус ответа')
+            raise exceptions.WrongStatusCodeException('Неудовлетворительный '
+                                                      'статус ответа')
         logger.info('Запрос к API прошел успешно')
         return response.json()
     except requests.exceptions.RequestException:
