@@ -36,6 +36,7 @@ formatter = logging.Formatter(
 )
 handler.setFormatter(formatter)
 
+
 def send_message(bot: telegram.Bot, message: str):
     """Отправить сообщение."""
     text = str(message)
