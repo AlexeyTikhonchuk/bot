@@ -29,6 +29,7 @@ HOMEWORK_STATUSES = {
 }
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 handler = StreamHandler()
 logger.addHandler(handler)
 formatter = logging.Formatter(
@@ -119,15 +120,12 @@ def main():
         except Exception as error:
             message = f'Сбой в работе программы: {error}'
             logger.error(message)
-            bot.send_message(TELEGRAM_CHAT_ID, message)
+            if message != prev_report:
+                bot.send_message(TELEGRAM_CHAT_ID, message)
+                prev_report = message
         finally:
             time.sleep(RETRY_TIME)
 
 
 if __name__ == '__main__':
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s, %(levelname)s, %(message)s',
-        filename='info.log'
-    )
     main()
