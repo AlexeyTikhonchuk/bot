@@ -4,6 +4,7 @@ import sys
 import time
 from http import HTTPStatus
 from logging import StreamHandler
+from typing import Dict
 
 import requests
 import telegram
@@ -77,9 +78,11 @@ def check_response(response: requests.models.Response):
     return homeworks
 
 
-def parse_status(homework: dict):
+def parse_status(homework: Dict[str, str]):
     """Получить статус работы."""
     homework_name = homework.get('homework_name')
+    if homework_name is None:
+        raise KeyError('Неправильный ключ')
     homework_status = homework.get('status')
     if homework_status is None:
         raise KeyError('Неправильный ключ')
@@ -93,8 +96,7 @@ def parse_status(homework: dict):
 
 def check_tokens():
     """Проверить наличие токенов."""
-    envs = ('PRACTICUM_TOKEN', 'TELEGRAM_TOKEN', 'TELEGRAM_CHAT_ID')
-    return all(globals()[name] for name in envs)
+    return all([PRACTICUM_TOKEN, TELEGRAM_TOKEN, TELEGRAM_CHAT_ID])
 
 
 def main():
@@ -121,7 +123,7 @@ def main():
             message = f'Сбой в работе программы: {error}'
             logger.error(message)
             if message != prev_report:
-                bot.send_message(TELEGRAM_CHAT_ID, message)
+                send_message(bot, message)
                 prev_report = message
         finally:
             time.sleep(RETRY_TIME)
